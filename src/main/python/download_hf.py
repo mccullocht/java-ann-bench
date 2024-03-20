@@ -13,6 +13,7 @@ wiki_en_embeddings = Dataset('Cohere/wikipedia-22-12-en-embeddings', 35_167_920,
 simple = Dataset('Cohere/wikipedia-22-12-simple-embeddings', 485_859, 768)
 
 dataset_info = wiki_en_embeddings
+#dataset_info = simple
 random.seed(0)
 
 test_indexes = set()

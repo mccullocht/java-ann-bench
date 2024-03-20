@@ -1,4 +1,4 @@
-heap_size := "40g"
+heap_size := "16g"
 
 init:
   git submodule init
@@ -13,7 +13,9 @@ update-jvector:
   cp submodules/jvector/jvector-multirelease/target/jvector-1.0.3-SNAPSHOT.jar libs/
 
 update-lucene:
-  git -C submodules/lucene pull origin vamana2
+  git -C submodules/lucene fetch origin
+  git -C submodules/lucene checkout binary-quantization
+  git -C submodules/lucene pull
   cd submodules/lucene && ./gradlew jar
   mkdir -p libs
   cp submodules/lucene/lucene/core/build/libs/lucene-core-10.0.0-SNAPSHOT.jar libs/
@@ -29,27 +31,33 @@ query config:
   #!/usr/bin/env bash
   set -exuo pipefail
 
-  pq_rerank=$(yq e '.query.pqRerank' {{config}})
-  mlock_graph=$(yq e '.query.mlockGraph' {{config}})
-  mmap_pq_vectors=$(yq e '.query.mmapPqVectors' {{config}})
-  mlock_pq_vectors=$(yq e '.query.mlockPqVectors' {{config}})
-  parallel_pq_vectors=$(yq e '.query.parallelPqVectors' {{config}})
-  parallel_neighborhoods=$(yq e '.query.parallelNeighborhoods' {{config}})
-  parallel_neighborhoods_beam_width=$(yq e '.query.parallelNeighborhoodsBeamWidth' {{config}})
-  parallel_rerank_threads=$(yq e '.query.parallelRerankThreads' {{config}})
-  node_cache_degree=$(yq e '.query.nodeCacheDegree' {{config}})
-  candidates=$(yq e '.query.numCandidates' {{config}})
+  segment_rescore=$(yq e '.query.segmentRescore' {{config}})
+  oversample=$(yq e '.query.oversample' {{config}})
 
-  export VAMANA_PQ_RERANK=${pq_rerank}
-  export VAMANA_MLOCK_GRAPH=${mlock_graph}
-  export VAMANA_MMAP_PQ_VECTORS=${mmap_pq_vectors}
-  export VAMANA_MLOCK_PQ_VECTORS=${mlock_pq_vectors}
-  export VAMANA_PARALLEL_PQ_VECTORS=${parallel_pq_vectors}
-  export VAMANA_PARALLEL_NEIGHBORHOODS=${parallel_neighborhoods}
-  export VAMANA_PARALLEL_NEIGHBORHOODS_BEAM_WIDTH=${parallel_neighborhoods_beam_width}
-  export VAMANA_PARALLEL_RERANK_THREADS=${parallel_rerank_threads}
-  export VAMANA_CACHE_DEGREE=${node_cache_degree}
-  export VAMANA_CANDIDATES=${candidates}
+  export BQ_SEGMENT_RESCORE=${segment_rescore}
+  export BQ_SEGMENT_RESCORE_OVERSAMPLE=${oversample}
+
+  #pq_rerank=$(yq e '.query.pqRerank' {{config}})
+  #mlock_graph=$(yq e '.query.mlockGraph' {{config}})
+  #mmap_pq_vectors=$(yq e '.query.mmapPqVectors' {{config}})
+  #mlock_pq_vectors=$(yq e '.query.mlockPqVectors' {{config}})
+  #parallel_pq_vectors=$(yq e '.query.parallelPqVectors' {{config}})
+  #parallel_neighborhoods=$(yq e '.query.parallelNeighborhoods' {{config}})
+  #parallel_neighborhoods_beam_width=$(yq e '.query.parallelNeighborhoodsBeamWidth' {{config}})
+  #parallel_rerank_threads=$(yq e '.query.parallelRerankThreads' {{config}})
+  #node_cache_degree=$(yq e '.query.nodeCacheDegree' {{config}})
+  #candidates=$(yq e '.query.numCandidates' {{config}})
+
+  #export VAMANA_PQ_RERANK=${pq_rerank}
+  #export VAMANA_MLOCK_GRAPH=${mlock_graph}
+  #export VAMANA_MMAP_PQ_VECTORS=${mmap_pq_vectors}
+  #export VAMANA_MLOCK_PQ_VECTORS=${mlock_pq_vectors}
+  #export VAMANA_PARALLEL_PQ_VECTORS=${parallel_pq_vectors}
+  #export VAMANA_PARALLEL_NEIGHBORHOODS=${parallel_neighborhoods}
+  #export VAMANA_PARALLEL_NEIGHBORHOODS_BEAM_WIDTH=${parallel_neighborhoods_beam_width}
+  #export VAMANA_PARALLEL_RERANK_THREADS=${parallel_rerank_threads}
+  #export VAMANA_CACHE_DEGREE=${node_cache_degree}
+  #export VAMANA_CANDIDATES=${candidates}
 
   ./gradlew run --console=plain --quiet -PminHeapSize="-Xmx{{heap_size}}" -PmaxHeapSize=-"Xms{{heap_size}}" --args="--query --config={{config}}"
 

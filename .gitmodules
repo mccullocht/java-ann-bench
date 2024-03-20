@@ -1,7 +1,7 @@
 [submodule "submodules/lucene"]
 	path = submodules/lucene
-	url = https://github.com/kevindrosendahl/lucene.git
-	branch = ann-sandbox
+	url = https://github.com/mccullocht/lucene.git
+	branch = main
 [submodule "submodules/jvector"]
 	path = submodules/jvector
 	url = https://github.com/kevindrosendahl/jvector.git

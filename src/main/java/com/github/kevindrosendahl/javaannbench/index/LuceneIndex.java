@@ -21,10 +21,12 @@ import java.util.stream.IntStream;
 import org.apache.commons.io.FileUtils;
 import org.apache.lucene.codecs.KnnVectorsFormat;
 import org.apache.lucene.codecs.lucene99.Lucene99Codec;
+import org.apache.lucene.codecs.lucene99.Lucene99HnswScalarQuantizedVectorsFormat;
 import org.apache.lucene.codecs.lucene99.Lucene99HnswVectorsFormat;
-import org.apache.lucene.codecs.lucene99.Lucene99ScalarQuantizedVectorsFormat;
-import org.apache.lucene.codecs.vectorsandbox.VectorSandboxScalarQuantizedVectorsFormat;
-import org.apache.lucene.codecs.vectorsandbox.VectorSandboxVamanaVectorsFormat;
+import org.apache.lucene.codecs.sandbox.BinaryQuantizedVectorsFormat;
+import org.apache.lucene.codecs.sandbox.HnswBinaryQuantizedVectorsFormat;
+//import org.apache.lucene.codecs.vectorsandbox.VectorSandboxScalarQuantizedVectorsFormat;
+//import org.apache.lucene.codecs.vectorsandbox.VectorSandboxVamanaVectorsFormat;
 import org.apache.lucene.document.Document;
 import org.apache.lucene.document.KnnFloatVectorField;
 import org.apache.lucene.document.StoredField;
@@ -47,7 +49,8 @@ public final class LuceneIndex {
 
   public enum Provider {
     HNSW("hnsw"),
-    SANDBOX_VAMANA("sandbox-vamana");
+    SANDBOX_VAMANA("sandbox-vamana"),
+    SANDBOX_BQ("sandbox-bq");
 
     final String description;
 
@@ -59,12 +62,13 @@ public final class LuceneIndex {
       return switch (description) {
         case "hnsw" -> Provider.HNSW;
         case "sandbox-vamana" -> Provider.SANDBOX_VAMANA;
+        case "sandbox-bq" -> Provider.SANDBOX_BQ;
         default -> throw new RuntimeException("unexpected lucene index provider " + description);
       };
     }
   }
 
-  public sealed interface BuildParameters permits VamanaBuildParameters, HnswBuildParameters {}
+  public sealed interface BuildParameters permits VamanaBuildParameters, HnswBuildParameters, BinaryQuantizationBuildParameters {}
 
   public record HnswBuildParameters(
       int maxConn, int beamWidth, boolean scalarQuantization, int numThreads, boolean forceMerge)
@@ -81,7 +85,14 @@ public final class LuceneIndex {
       boolean forceMerge)
       implements BuildParameters {}
 
-  public sealed interface QueryParameters permits HnswQueryParameters, VamanaQueryParameters {}
+  public record BinaryQuantizationBuildParameters(
+    boolean flat,
+    int maxConn,
+    int beamWidth,
+    int numThreads,
+    boolean forceMerge) implements BuildParameters {}
+
+  public sealed interface QueryParameters permits HnswQueryParameters, VamanaQueryParameters, BinaryQuantizationQueryParameters {}
 
   public record HnswQueryParameters(int numCandidates) implements QueryParameters {}
 
@@ -97,6 +108,9 @@ public final class LuceneIndex {
       String parallelRerankThreads,
       int nodeCacheDegree)
       implements QueryParameters {}
+
+  public record BinaryQuantizationQueryParameters (
+      int numCandidates, boolean segmentRescore, float oversample) implements QueryParameters {}
 
   private static final String VECTOR_FIELD = "vector";
   private static final String ID_FIELD = "id";
@@ -136,7 +150,7 @@ public final class LuceneIndex {
         throws IOException {
       var provider = Provider.parse(parameters.type());
 
-      var buildParams = parseBuildPrams(provider, parameters.buildParameters());
+      var buildParams = parseBuildParams(provider, parameters.buildParameters());
 
       var similarity =
           switch (similarityFunction) {
@@ -155,23 +169,56 @@ public final class LuceneIndex {
           switch (provider) {
             case HNSW -> {
               var hnswParams = (HnswBuildParameters) buildParams;
-              yield new Lucene99Codec() {
-                @Override
-                public KnnVectorsFormat getKnnVectorsFormatForField(String field) {
-                  return new Lucene99HnswVectorsFormat(
-                      hnswParams.maxConn,
-                      hnswParams.beamWidth,
-                      hnswParams.scalarQuantization
-                          ? new Lucene99ScalarQuantizedVectorsFormat()
-                          : null,
-                      hnswParams.numThreads,
-                      hnswParams.numThreads == 1
-                          ? null
-                          : Executors.newFixedThreadPool(hnswParams.numThreads));
-                }
-              };
+              if (hnswParams.scalarQuantization) {
+                yield new Lucene99Codec() {
+                  @Override
+                  public KnnVectorsFormat getKnnVectorsFormatForField(String field) {
+                    return new Lucene99HnswScalarQuantizedVectorsFormat(
+                        hnswParams.maxConn,
+                        hnswParams.beamWidth,
+                        hnswParams.numThreads,
+                        null,
+                        hnswParams.numThreads == 1
+                            ? null
+                            : Executors.newFixedThreadPool(hnswParams.numThreads));
+                  }
+                };
+              } else {
+                yield new Lucene99Codec() {
+                  @Override
+                  public KnnVectorsFormat getKnnVectorsFormatForField(String field) {
+                    return new Lucene99HnswVectorsFormat(
+                        hnswParams.maxConn,
+                        hnswParams.beamWidth,
+                        hnswParams.numThreads,
+                        hnswParams.numThreads == 1
+                            ? null
+                            : Executors.newFixedThreadPool(hnswParams.numThreads));
+                  }
+                };
+              }
+            }
+            case SANDBOX_BQ -> {
+              var bqParams = (BinaryQuantizationBuildParameters)buildParams;
+              if (bqParams.flat) {
+                yield new Lucene99Codec() {
+                  @Override
+                  public KnnVectorsFormat getKnnVectorsFormatForField(String field) {
+                    return new BinaryQuantizedVectorsFormat();
+                  }
+                };
+              } else {
+                yield new Lucene99Codec() {
+                  @Override
+                  public KnnVectorsFormat getKnnVectorsFormatForField(String field) {
+                    return new HnswBinaryQuantizedVectorsFormat(bqParams.maxConn, bqParams.beamWidth, bqParams.numThreads, bqParams.numThreads == 1 ? null : Executors.newFixedThreadPool(bqParams.numThreads));
+                  }
+                };
+              }
             }
             case SANDBOX_VAMANA -> {
+              throw new UnsupportedOperationException("unimplemented");
+              /*
               var vamanaParams = (VamanaBuildParameters) buildParams;
               yield new Lucene99Codec() {
                 @Override
@@ -191,6 +238,7 @@ public final class LuceneIndex {
                           : Executors.newFixedThreadPool(vamanaParams.numThreads));
                 }
               };
+              */
             }
           };
 
@@ -267,7 +315,8 @@ public final class LuceneIndex {
               new IndexWriterConfig()
                   .setCodec(codec)
                   .setUseCompoundFile(false)
-                  .setMaxBufferedDocs(1000000000)
+                  // XXX .setMaxBufferedDocs(1000000000)
+                  .setMaxBufferedDocs(1000000)
                   .setRAMBufferSizeMB(40 * 1024)
                   .setMergePolicy(mergePolicy)
                   .setMergeScheduler(new SerialMergeScheduler()));
@@ -283,6 +332,7 @@ public final class LuceneIndex {
           switch (buildParams) {
             case HnswBuildParameters params -> params.numThreads;
             case VamanaBuildParameters params -> params.numThreads;
+            case BinaryQuantizationBuildParameters params -> params.numThreads;
           };
 
       var buildStart = Instant.now();
@@ -317,6 +367,7 @@ public final class LuceneIndex {
           switch (buildParams) {
             case HnswBuildParameters params -> params.forceMerge;
             case VamanaBuildParameters params -> params.forceMerge;
+            case BinaryQuantizationBuildParameters params -> params.forceMerge;
           };
 
       var mergeStart = Instant.now();
@@ -377,6 +428,10 @@ public final class LuceneIndex {
             vamana.scalarQuantization,
             vamana.numThreads,
             vamana.forceMerge);
+        case BinaryQuantizationBuildParameters bq -> String.format(
+            "flat:%s-maxConn:%s-beamWidth:%s-numThreads:%s-forceMerge:%s",
+            bq.flat, bq.maxConn, bq.beamWidth, bq.numThreads, bq.forceMerge
+        );
       };
     }
   }
@@ -408,8 +463,8 @@ public final class LuceneIndex {
     public static Index.Querier create(Path indexesPath, Parameters parameters) throws IOException {
       var provider = Provider.parse(parameters.type());
 
-      var buildParams = parseBuildPrams(provider, parameters.buildParameters());
-      var queryParams = parseQueryPrams(provider, parameters.queryParameters());
+      var buildParams = parseBuildParams(provider, parameters.buildParameters());
+      var queryParams = parseQueryParams(provider, parameters.queryParameters());
 
       var buildDescription = LuceneIndex.Builder.buildDescription(provider, buildParams);
       var path = indexesPath.resolve(buildDescription);
@@ -428,6 +483,7 @@ public final class LuceneIndex {
           switch (queryParams) {
             case HnswQueryParameters hnsw -> hnsw.numCandidates;
             case VamanaQueryParameters vamana -> vamana.numCandidates;
+            case BinaryQuantizationQueryParameters bq -> bq.numCandidates;
           };
 
       var query = new KnnFloatVectorQuery(VECTOR_FIELD, vector, numCandidates);
@@ -471,25 +527,28 @@ public final class LuceneIndex {
         case HnswQueryParameters hnsw -> String.format("numCandidates:%s", hnsw.numCandidates);
         case VamanaQueryParameters vamana -> String.format(
             "numCandidates:%s-pqRerank:%s", vamana.numCandidates, vamana.pqRerank);
+        case BinaryQuantizationQueryParameters bq -> String.format("numCandidates:%s", bq.numCandidates);
       };
     }
   }
 
-  private static BuildParameters parseBuildPrams(
+  private static BuildParameters parseBuildParams(
       Provider provider, Map<String, String> parameters) {
     return switch (provider) {
       case HNSW -> Records.fromMap(parameters, HnswBuildParameters.class, "build parameters");
       case SANDBOX_VAMANA -> Records.fromMap(
           parameters, VamanaBuildParameters.class, "build parameters");
+      case SANDBOX_BQ -> Records.fromMap(parameters, BinaryQuantizationBuildParameters.class, "build parameters");
     };
   }
 
-  private static QueryParameters parseQueryPrams(
+  private static QueryParameters parseQueryParams(
       Provider provider, Map<String, String> parameters) {
     return switch (provider) {
       case HNSW -> Records.fromMap(parameters, HnswQueryParameters.class, "query parameters");
       case SANDBOX_VAMANA -> Records.fromMap(
           parameters, VamanaQueryParameters.class, "query parameters");
+      case SANDBOX_BQ -> Records.fromMap(parameters, BinaryQuantizationQueryParameters.class, "query parameters");
     };
   }
 }
