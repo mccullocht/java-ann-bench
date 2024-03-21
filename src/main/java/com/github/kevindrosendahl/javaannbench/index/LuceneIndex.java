@@ -41,7 +41,9 @@ import org.apache.lucene.index.SegmentInfos;
 import org.apache.lucene.index.SerialMergeScheduler;
 import org.apache.lucene.index.VectorSimilarityFunction;
 import org.apache.lucene.search.IndexSearcher;
+import org.apache.lucene.search.KnnFloatRescoreVectorQuery;
 import org.apache.lucene.search.KnnFloatVectorQuery;
+import org.apache.lucene.search.Query;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.store.MMapDirectory;
 
@@ -486,7 +488,10 @@ public final class LuceneIndex {
             case BinaryQuantizationQueryParameters bq -> bq.numCandidates;
           };
 
-      var query = new KnnFloatVectorQuery(VECTOR_FIELD, vector, numCandidates);
+      Query query = switch (queryParams) {
+        case BinaryQuantizationQueryParameters bq -> new KnnFloatRescoreVectorQuery(VECTOR_FIELD, vector, numCandidates);
+        default -> new KnnFloatVectorQuery(VECTOR_FIELD, vector, numCandidates);
+      };
       var results = this.searcher.search(query, numCandidates);
       var ids = new ArrayList<Integer>(k);
 
