@@ -1,15 +1,14 @@
 import numpy as np
 import faiss
+from faiss.contrib.exhaustive_search import knn
 
 dimensions = 768
 
-train = np.fromfile('train.fvecs', dtype='float32').reshape(-1, dimensions)
+train = np.memmap('train.fvecs', dtype='float32').reshape(-1, dimensions)
 test = np.fromfile('test.fvecs', dtype='float32').reshape(-1, dimensions)
 
-index = faiss.IndexFlatIP(dimensions)
-index.add(train)
-
 k = 100
-D, I = index.search(test[0:10000], k)  # `D` is an array of distances, `I` is an array of indices
+D, I = knn(test[0:10000], train, k, faiss.METRIC_INNER_PRODUCT)
+
 I = np.array(I, dtype=np.int32)
 I.tofile('neighbors.ivecs')

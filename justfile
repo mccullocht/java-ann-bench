@@ -31,11 +31,11 @@ query config:
   #!/usr/bin/env bash
   set -exuo pipefail
 
-  segment_rescore=$(yq e '.query.segmentRescore' {{config}})
   oversample=$(yq e '.query.oversample' {{config}})
+  float_hnsw=$(yq e '.query.floatHnsw' {{config}})
 
-  export BQ_SEGMENT_RESCORE=${segment_rescore}
   export BQ_SEGMENT_RESCORE_OVERSAMPLE=${oversample}
+  export BQ_FLOAT_HNSW=${float_hnsw}
 
   #pq_rerank=$(yq e '.query.pqRerank' {{config}})
   #mlock_graph=$(yq e '.query.mlockGraph' {{config}})

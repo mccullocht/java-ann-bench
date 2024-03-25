@@ -8,12 +8,23 @@ import os
 from collections import namedtuple
 from datasets import load_dataset
 
-Dataset = namedtuple('Dataset', ['name', 'size', 'dimensions'])
-wiki_en_embeddings = Dataset('Cohere/wikipedia-22-12-en-embeddings', 35_167_920, 768)
-simple = Dataset('Cohere/wikipedia-22-12-simple-embeddings', 485_859, 768)
+Dataset = namedtuple('Dataset', ['name', 'column', 'size', 'dimensions'])
+wiki_en_embeddings = Dataset('Cohere/wikipedia-22-12-en-embeddings', 'emb', 35_167_920, 768)
+simple = Dataset('Cohere/wikipedia-22-12-simple-embeddings', 'emb', 485_859, 768)
+qdrant_dbpedia_small = Dataset(
+    "Qdrant/dbpedia-entities-openai3-text-embedding-3-large-1536-1M", 'emb', 1_000_000, 1536)
+qdrant_dbpedia_large = Dataset(
+    "Qdrant/dbpedia-entities-openai3-text-embedding-3-large-3072-1M",
+    'text-embedding-3-large-3072-embedding',
+    1_000_000,
+    3072)
+qdrant_dbpedia_large2 = Dataset(
+    "Qdrant/dbpedia-entities-openai3-text-embedding-3-large-3072-1M",
+    'text-embedding-ada-002-1536-embedding',
+    1_000_000,
+    1536)
 
-dataset_info = wiki_en_embeddings
-#dataset_info = simple
+dataset_info = qdrant_dbpedia_large2
 random.seed(0)
 
 test_indexes = set()
@@ -26,7 +37,7 @@ def process_chunk(start_idx, end_idx, chunk_id, chunk_offset, dataset_info, test
     for i, doc in enumerate(dataset):
       idx = chunk_offset + i
       test_embedding = idx in test_indexes
-      emb = doc['emb']
+      emb = doc[dataset_info.column]
       emb_array = np.array(emb, dtype='<f4')
       file = test if test_embedding else train
       file.write(emb_array.tobytes())

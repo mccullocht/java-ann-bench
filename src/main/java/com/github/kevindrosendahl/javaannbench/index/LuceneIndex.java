@@ -112,7 +112,7 @@ public final class LuceneIndex {
       implements QueryParameters {}
 
   public record BinaryQuantizationQueryParameters (
-      int numCandidates, boolean segmentRescore, float oversample) implements QueryParameters {}
+      int numCandidates, float oversample, boolean floatHnsw) implements QueryParameters {}
 
   private static final String VECTOR_FIELD = "vector";
   private static final String ID_FIELD = "id";
@@ -488,10 +488,17 @@ public final class LuceneIndex {
             case BinaryQuantizationQueryParameters bq -> bq.numCandidates;
           };
 
-      Query query = switch (queryParams) {
-        case BinaryQuantizationQueryParameters bq -> new KnnFloatRescoreVectorQuery(VECTOR_FIELD, vector, numCandidates);
-        default -> new KnnFloatVectorQuery(VECTOR_FIELD, vector, numCandidates);
-      };
+      Query query =
+          switch (queryParams) {
+            case BinaryQuantizationQueryParameters bq -> {
+              if (bq.floatHnsw) {
+                yield new KnnFloatVectorQuery(VECTOR_FIELD, vector, numCandidates);
+              } else {
+                yield new KnnFloatRescoreVectorQuery(VECTOR_FIELD, vector, numCandidates);
+              }
+            }
+            default -> new KnnFloatVectorQuery(VECTOR_FIELD, vector, numCandidates);
+          };
       var results = this.searcher.search(query, numCandidates);
       var ids = new ArrayList<Integer>(k);
 
