@@ -12,19 +12,17 @@ Dataset = namedtuple('Dataset', ['name', 'column', 'size', 'dimensions'])
 wiki_en_embeddings = Dataset('Cohere/wikipedia-22-12-en-embeddings', 'emb', 35_167_920, 768)
 simple = Dataset('Cohere/wikipedia-22-12-simple-embeddings', 'emb', 485_859, 768)
 qdrant_dbpedia_small = Dataset(
-    "Qdrant/dbpedia-entities-openai3-text-embedding-3-large-1536-1M", 'emb', 1_000_000, 1536)
+    "Qdrant/dbpedia-entities-openai3-text-embedding-3-large-1536-1M",
+    'text-embedding-3-large-1536-embedding',
+    1_000_000,
+    1536)
 qdrant_dbpedia_large = Dataset(
     "Qdrant/dbpedia-entities-openai3-text-embedding-3-large-3072-1M",
     'text-embedding-3-large-3072-embedding',
     1_000_000,
     3072)
-qdrant_dbpedia_large2 = Dataset(
-    "Qdrant/dbpedia-entities-openai3-text-embedding-3-large-3072-1M",
-    'text-embedding-ada-002-1536-embedding',
-    1_000_000,
-    1536)
 
-dataset_info = qdrant_dbpedia_large2
+dataset_info = qdrant_dbpedia_small
 random.seed(0)
 
 test_indexes = set()
@@ -33,7 +31,7 @@ while len(test_indexes) < 10000:
 
 def process_chunk(start_idx, end_idx, chunk_id, chunk_offset, dataset_info, test_indexes):
   dataset = load_dataset(dataset_info.name, split=f'train[{start_idx}%:{end_idx}%]')
-  with open(f'train_{chunk_id}.fvecs', 'wb') as train, open(f'test_{chunk_id}.fvecs', 'wb') as test:
+  with open(f'train_{chunk_id:02}.fvecs', 'wb') as train, open(f'test_{chunk_id:02}.fvecs', 'wb') as test:
     for i, doc in enumerate(dataset):
       idx = chunk_offset + i
       test_embedding = idx in test_indexes
@@ -46,9 +44,9 @@ def process_chunk(start_idx, end_idx, chunk_id, chunk_offset, dataset_info, test
 def merge_files(file_type):
   with open(f'{file_type}.fvecs', 'wb') as outfile:
     for i in range(num_processes):
-      with open(f'{file_type}_{i}.fvecs', 'rb') as infile:
+      with open(f'{file_type}_{i:02}.fvecs', 'rb') as infile:
         outfile.write(infile.read())
-      os.remove(f'{file_type}_{i}.fvecs')
+      os.remove(f'{file_type}_{i:02}.fvecs')
 
 
 if __name__ == '__main__':
@@ -64,17 +62,11 @@ if __name__ == '__main__':
     for i in range(num_processes)
   ]
 
-  processes = []
-  for i in range(num_processes):
-    p = multiprocessing.Process(
-        target=process_chunk,
-        args=(int(i * step), int((i + 1) * step), i, chunk_offsets[i], dataset_info, test_indexes)
-    )
-    p.start()
-    processes.append(p)
-
-  for p in processes:
-    p.join()
+  print("begin processing")
+  with multiprocessing.pool.Pool(4) as pool:
+      results = [pool.apply_async(func=process_chunk, args=(int(i * step), int((i + 1) * step), i, chunk_offsets[i], dataset_info, test_indexes)) for i in range(num_processes)]
+      for r in results:
+          r.wait()
 
   merge_files('train')
   merge_files('test')

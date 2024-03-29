@@ -20,7 +20,9 @@ public enum Datasets {
   GLOVE_25("glove-25-angular", 1183514, 10000, 25, SimilarityFunction.COSINE),
   MNIST_784("mnist-784-euclidean", 60000, 10000, 784, SimilarityFunction.EUCLIDEAN),
   NYTIMES_256("nytimes-256-angular", 290000, 10000, 256, SimilarityFunction.COSINE),
-  SIFT_128("sift-128-euclidean", 1000000, 10000, 128, SimilarityFunction.EUCLIDEAN);
+  SIFT_128("sift-128-euclidean", 1000000, 10000, 128, SimilarityFunction.EUCLIDEAN),
+  QDRANT_DBPEDIA_3072("qdrant-dbpedia-large-3072-dot", 990000, 10000, 3072, SimilarityFunction.DOT_PRODUCT),
+  QDRANT_DBPEDIA_1536("qdrant-dbpedia-large-1536-dot", 990000, 10000, 1536, SimilarityFunction.DOT_PRODUCT);
 
   public final String name;
   public final int numTrainVectors;
@@ -55,6 +57,8 @@ public enum Datasets {
           case "mnist-784-euclidean" -> MNIST_784;
           case "nytimes-256-angular" -> NYTIMES_256;
           case "sift-128-euclidean" -> SIFT_128;
+          case "qdrant-dbpedia-large-3072-dot" -> QDRANT_DBPEDIA_3072;
+          case "qdrant-dbpedia-large-1536-dot" -> QDRANT_DBPEDIA_1536;
           default -> throw new RuntimeException("unknown dataset " + name);
         };
 

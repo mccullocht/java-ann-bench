@@ -1,7 +1,7 @@
 import numpy as np
 from faiss.contrib.exhaustive_search import knn
 
-dimensions = 768
+dimensions = 3072
 
 train = np.memmap('train.fvecs', dtype='float32').reshape(-1, dimensions)
 test = np.fromfile('test.fvecs', dtype='float32').reshape(-1, dimensions)

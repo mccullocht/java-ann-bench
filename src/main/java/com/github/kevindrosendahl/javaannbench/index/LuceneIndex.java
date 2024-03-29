@@ -23,7 +23,6 @@ import org.apache.lucene.codecs.KnnVectorsFormat;
 import org.apache.lucene.codecs.lucene99.Lucene99Codec;
 import org.apache.lucene.codecs.lucene99.Lucene99HnswScalarQuantizedVectorsFormat;
 import org.apache.lucene.codecs.lucene99.Lucene99HnswVectorsFormat;
-import org.apache.lucene.codecs.sandbox.BinaryQuantizedVectorsFormat;
 import org.apache.lucene.codecs.sandbox.HnswBinaryQuantizedVectorsFormat;
 //import org.apache.lucene.codecs.vectorsandbox.VectorSandboxScalarQuantizedVectorsFormat;
 //import org.apache.lucene.codecs.vectorsandbox.VectorSandboxVamanaVectorsFormat;
@@ -202,21 +201,12 @@ public final class LuceneIndex {
             }
             case SANDBOX_BQ -> {
               var bqParams = (BinaryQuantizationBuildParameters)buildParams;
-              if (bqParams.flat) {
-                yield new Lucene99Codec() {
-                  @Override
-                  public KnnVectorsFormat getKnnVectorsFormatForField(String field) {
-                    return new BinaryQuantizedVectorsFormat();
-                  }
-                };
-              } else {
-                yield new Lucene99Codec() {
-                  @Override
-                  public KnnVectorsFormat getKnnVectorsFormatForField(String field) {
-                    return new HnswBinaryQuantizedVectorsFormat(bqParams.maxConn, bqParams.beamWidth, bqParams.numThreads, bqParams.numThreads == 1 ? null : Executors.newFixedThreadPool(bqParams.numThreads));
-                  }
-                };
-              }
+              yield new Lucene99Codec() {
+                @Override
+                public KnnVectorsFormat getKnnVectorsFormatForField(String field) {
+                  return new HnswBinaryQuantizedVectorsFormat(bqParams.maxConn, bqParams.beamWidth, bqParams.numThreads, bqParams.numThreads == 1 ? null : Executors.newFixedThreadPool(bqParams.numThreads));
+                }
+              };
             }
             case SANDBOX_VAMANA -> {
               throw new UnsupportedOperationException("unimplemented");
